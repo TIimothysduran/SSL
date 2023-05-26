@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Replace example.com with the target domain
+TARGET_DOMAIN="example.com"
+
+# Send request to SSL Labs API and save the response to a file
+curl -s "https://api.ssllabs.com/api/v3/analyze?host=$TARGET_DOMAIN" -o response.json
+
+# Extract the endpoint information from the response
+ENDPOINTS=$(jq -r '.endpoints[] | "\(.ipAddress) \(.details.certChain[0].subject)"' response.json)
+
+# Loop through each endpoint and extract the certificate
+while read -r endpoint; do
+  # Extract the IP address and subject from the endpoint information
+  IP=$(echo "$endpoint" | awk '{print $1}')
+  SUBJECT=$(echo "$endpoint" | awk '{$1=""; print}')
+
+  # Output the IP address and subject
+  echo "IP: $IP"
+  echo "Subject: $SUBJECT"
+  echo
+
+  # Retrieve the certificate chain for the endpoint
+  curl -s "https://api.ssllabs.com/api/v3/getEndpointData?host=$TARGET_DOMAIN&s=$IP" -o endpoint.json
+
+  # Extract the certificate chain from the endpoint response
+  CERTIFICATE_CHAIN=$(jq -r '.details.chain[0].certificates[].pem' endpoint.json)
+
+  # Output the certificate chain
+  echo "$CERTIFICATE_CHAIN"
+
+  echo
+done <<< "$ENDPOINTS"
+
+# Clean up the response and endpoint JSON files
+rm response.json endpoint.json
